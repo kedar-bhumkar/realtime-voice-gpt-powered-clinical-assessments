@@ -18,5 +18,8 @@ This app demos the ability to use natural voice to fill complex clinical assessm
 
 Below is a demonstration video showcasing the application's key features:
 
-https://github.com/kedar-bhumkar/assessments-agent-client-gpt-4.1-nano/raw/main/data/demo.mp4
+<video width="100%" controls>
+  <source src="https://github.com/kedar-bhumkar/assessments-agent-client-gpt-4.1-nano/data/demo.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
