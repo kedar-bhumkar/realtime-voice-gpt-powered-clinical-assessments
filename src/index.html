@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Dictated Clinical Assessment</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Clinical Assessment</h1>
+        </div>
+
+        <p class="description">Speak clearly to answer the questions. The form will fill out in real-time.</p>
+        
+        <div class="controls">
+            <button id="saveBtn">Save</button>
+            <button id="cancelBtn">Cancel</button>
+        </div>
+
+        <div id="status" class="status-idle">
+            Status: Idle. Click the microphone to begin.
+        </div>
+
+        <div id="saveMessage" style="display: none; color: green; margin: 10px 0;"></div>
+
+        <form id="assessment-form">
+            <!-- Questions will be dynamically inserted here by JavaScript -->
+        </form>
+    </div>
+
+    <button id="recordBtn" class="record-btn floating-record-btn">
+        <i class="fas fa-microphone"></i>
+    </button>
+
+    <!-- This is the magic: import WebLLM and our app logic -->
+    <!-- 'type="module"' is crucial for using import/export syntax -->
+    <script type="module" src="app.js"></script>
+
+</body>
+</html>
