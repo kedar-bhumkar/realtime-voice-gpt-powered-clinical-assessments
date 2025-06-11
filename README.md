@@ -18,5 +18,5 @@ This app demos the ability to use natural voice to fill complex clinical assessm
 
 Below is a demonstration video showcasing the application's key features:
 
-https://github.com/kedar-bhumkar/realtime-voice-gpt-powered-clinical-assessments?tab=readme-ov-file
+https://github.com/kedar-bhumkar/assessments-agent-client-gpt-4.1-nano/raw/main/data/demo.mp4
 
