@@ -26,7 +26,7 @@ const tools = [{
 },{
     "type": "function",
     "name": "handleCancel",
-    "description": "Handle the cancel action. Call this function when the users asks to cancel the assessment",
+    "description": "Handle the cancel action. Call this function when the users asks to cancel the assessment or they mention reset the assessments or reset all answers",
     "parameters": {
     }
 }
@@ -128,7 +128,7 @@ const QUESTIONS = {
 };
 
 // Get API key from environment variable
-const OPENAI_API_KEY = ""
+const OPENAI_API_KEY = "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"
 
 // Models available: https://github.com/mlc-ai/web-llm
 // Select a small, fast model.
@@ -150,6 +150,7 @@ let finalTranscript = '';
 let isRecording = false;
 let showAllQuestions = false;
 let answersState = {};
+let processTranscriptCounter = 0;
 
 // 4. UI FUNCTIONS
 function renderQuestions() {
@@ -388,6 +389,9 @@ function createLLMPrompt(transcript) {
 }
 
 async function processTranscriptWithLLM(transcript) {
+    processTranscriptCounter++;
+    console.log(`processTranscriptWithLLM called ${processTranscriptCounter} times`);
+    
     if (!openai) {
         updateStatus("LLM not initialized.", "error");
         return;
