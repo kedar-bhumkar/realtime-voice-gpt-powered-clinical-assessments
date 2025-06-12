@@ -128,7 +128,7 @@ const QUESTIONS = {
 };
 
 // Get API key from environment variable
-const OPENAI_API_KEY = "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"
+const OPENAI_API_KEY = ""
 
 // Models available: https://github.com/mlc-ai/web-llm
 // Select a small, fast model.
