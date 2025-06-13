@@ -128,7 +128,7 @@ const QUESTIONS = {
 };
 
 // Get API key from environment variable
-const OPENAI_API_KEY = ""
+const OPENAI_API_KEY = ""; // Replace with your API key or use a secure method to retrieve it
 
 // Models available: https://github.com/mlc-ai/web-llm
 // Select a small, fast model.
@@ -347,7 +347,7 @@ async function initializeLLM() {
 function createLLMPrompt(transcript) {
     // This is the most critical part: instructing the LLM precisely.
     return `
-      You are an expert AI assistant for a clinical setting. Your task is to analyze a nurse's dictated transcript and fill out an assessment form based on the provided assessment questions and nurse transcript.
+      You are an expert AI assistant for a clinical setting. Your task is to analyze a on ongoing conversation between a nurse and a patient and fill out an assessment form based on the provided assessment questions and the dialog between the nurse and the patient.
       **ASSESSMENT QUESTIONS:**
       ${JSON.stringify(QUESTIONS, null, 2)}
 
