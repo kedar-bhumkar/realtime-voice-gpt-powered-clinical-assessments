@@ -8,23 +8,34 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Clinical Assessment</h1>
+    <div class="app-container">
+        <div class="sidebar">
+            <h2>Sections</h2>
+            <div id="sections-list">
+                <!-- Sections will be dynamically inserted here -->
+            </div>
         </div>
-
-        <p class="description">Speak clearly to answer the questions. The form will fill out in real-time.</p>
         
-        <div class="controls">
-            <button id="saveBtn">Save</button>
-            <button id="cancelBtn">Cancel</button>
+        <div class="main-content">
+            <div class="container">
+                <div class="header">
+                    <h1>Clinical Assessment</h1>
+                </div>
+
+                <p class="description">Speak clearly to answer the questions. The form will fill out in real-time.</p>
+                
+                <div class="controls">
+                    <button id="saveBtn">Save</button>
+                    <button id="cancelBtn">Cancel</button>
+                </div>
+
+                <div id="saveMessage" style="display: none; color: green; margin: 10px 0;"></div>
+
+                <form id="assessment-form">
+                    <!-- Questions will be dynamically inserted here by JavaScript -->
+                </form>
+            </div>
         </div>
-
-        <div id="saveMessage" style="display: none; color: green; margin: 10px 0;"></div>
-
-        <form id="assessment-form">
-            <!-- Questions will be dynamically inserted here by JavaScript -->
-        </form>
     </div>
 
     <div id="status" class="status-idle">

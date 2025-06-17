@@ -2,23 +2,6 @@ import { OpenAI } from  "https://esm.sh/openai";
 
 const tools = [{
     "type": "function",
-    "name": "get_weather",
-    "description": "Get current temperature for a given location.",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "location": {
-                "type": "string",
-                "description": "City and country e.g. Bogotá, Colombia"
-            }
-        },
-        "required": [
-            "location"
-        ],
-        "additionalProperties": false
-    }
-},{
-    "type": "function",
     "name": "handleSave",
     "description": "Handle the save action. Call this function when the users asks to save the assessment",
     "parameters": {
@@ -36,7 +19,8 @@ const tools = [{
 
 
 // 1. DATA AND CONSTANTS
-const QUESTIONS = {
+const SECTIONS = [{
+    "name": "DSNP core",
     "questions": [
         {
             "id": "q1",
@@ -71,7 +55,9 @@ const QUESTIONS = {
             "id": "q4",
             "text": "Primary Care Provider (PCP)",
             "type": "text",
-            "instruction": "Primary Care Provider (PCP) populates from Physician Information. If PCP did not populate, please update Pathway with PCP. Select No for this question and enter PCP information in the assessment."
+            "instruction": "What is the name of your Primary Care Provider (PCP)?",
+            "answer": ""
+
         },
         {
             "id": "q5",
@@ -125,7 +111,34 @@ const QUESTIONS = {
             "instruction": "If Response is equal to Other then answer Question 'a'"
         }
     ]
-};
+}, {
+    "name": "PHQ-9",
+    "questions": [
+        {
+            "id": "phq1",
+            "text": "Do you have any issues with your sleep?",
+            "type": "radio",
+            "answers": [        
+                { "id": "1", "text": "Not at all" },
+                { "id": "2", "text": "Several days" },
+                { "id": "3", "text": "More than half the days" },
+                { "id": "4", "text": "Nearly every day" }
+            ]
+        },
+        {
+            "id": "phq2",
+            "text": "Poor appetite or overeating?",
+            "type": "radio",
+            "answers": [        
+                { "id": "1", "text": "Not at all" },
+                { "id": "2", "text": "Several days" },
+                { "id": "3", "text": "More than half the days" },
+                { "id": "4", "text": "Nearly every day" }
+            ]
+        }
+    ]
+}];
+
 
 // Get API key from environment variable
 const OPENAI_API_KEY = ""; // Replace with your API key or use a secure method to retrieve it
@@ -148,15 +161,70 @@ let openai;
 let recognition;
 let finalTranscript = '';
 let isRecording = false;
-let showAllQuestions = false;
+let currentSection = null;
 let answersState = {};
 let processTranscriptCounter = 0;
+let mediaStream = null;
 
 // 4. UI FUNCTIONS
-function renderQuestions() {
+function renderSections() {
+    const sectionsList = document.getElementById('sections-list');
     let html = '';
-    const questionsToShow = showAllQuestions ? QUESTIONS.questions : [QUESTIONS.questions[0]];
-    questionsToShow.forEach(q => {
+    
+    console.log('All SECTIONS:', SECTIONS);
+    
+    SECTIONS.forEach((section, index) => {
+        console.log(`Section ${index}:`, section);
+        html += `<div class="section-link" data-section="${index}">${section.name}</div>`;
+    });
+    
+    sectionsList.innerHTML = html;
+
+    // Add click event listeners to sections
+    document.querySelectorAll('.section-link').forEach(link => {
+        link.addEventListener('click', () => {
+            // Remove active class from all sections
+            document.querySelectorAll('.section-link').forEach(l => l.classList.remove('active'));
+            // Add active class to clicked section
+            link.classList.add('active');
+            // Update current section and render its questions
+            const sectionIndex = parseInt(link.getAttribute('data-section'));
+            console.log('Selected section index:', sectionIndex);
+            currentSection = SECTIONS[sectionIndex];
+            console.log('Selected section:', currentSection);
+            renderQuestions();
+        });
+    });
+
+    // Automatically select the first section
+    const firstSection = document.querySelector('.section-link');
+    if (firstSection) {
+        firstSection.click();
+    }
+}
+
+function renderQuestions() {
+    if (!currentSection) {
+        console.error('No current section set');
+        return;
+    }
+    
+    console.log('Rendering questions for section:', currentSection);
+    const sectionKey = Object.keys(currentSection)[0];
+    console.log('Section Key:', sectionKey);
+    console.log('Section data:', currentSection);
+    
+    // Access questions directly from currentSection
+    const questions = currentSection.questions;
+    if (!questions) {
+        console.error('No questions found for section:', sectionKey);
+        return;
+    }
+    
+    console.log('Questions:', questions);
+    let html = '';
+    
+    questions.forEach(q => {
         html += `<div class="question-block" id="block-${q.id}">`;
         html += `<label class="question-text">${q.text}</label>`;
         if (q.instruction) {
@@ -185,21 +253,24 @@ function renderQuestions() {
         }
         html += `</div></div>`;
     });
+    
     formContainer.innerHTML = html;
 
-    // Always add event listener for the first question's radio buttons
-    const radios = document.querySelectorAll('input[name="q1"]');
-    radios.forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            answersState['q1'] = e.target.value;
-            if (e.target.value === '1') { // 'Yes' selected
-                showAllQuestions = true;
-                renderQuestions();
-            } else if (e.target.value === '2') { // 'No' selected
-                showAllQuestions = false;
-                // Clear all answers except q1
-                Object.keys(answersState).forEach(key => { if (key !== 'q1') delete answersState[key]; });
-                renderQuestions();
+    // Add event listeners for inputs
+    document.querySelectorAll('input[type="radio"], input[type="checkbox"], input[type="text"]').forEach(input => {
+        input.addEventListener('change', (e) => {
+            if (input.type === 'checkbox') {
+                // Initialize array if it doesn't exist
+                if (!answersState[input.name]) {
+                    answersState[input.name] = [];
+                }
+                if (e.target.checked) {
+                    answersState[input.name].push(input.value);
+                } else {
+                    answersState[input.name] = answersState[input.name].filter(v => v !== input.value);
+                }
+            } else {
+                answersState[input.name] = input.value;
             }
         });
     });
@@ -212,82 +283,44 @@ function updateStatus(text, type = 'idle') {
 
 function updateUIWithAnswers(answers) {
     console.log("Updating UI with:", answers);
-    let triggeredShowAll = false;
+    
+    // Update the answers state
     for (const questionId in answers) {
         const answerId = answers[questionId];
         answersState[questionId] = answerId;
-        // If q1 is set to 'No' programmatically, hide all questions except q1 and clear other answers
-        if (questionId === 'q1' && answerId === '2' && showAllQuestions) {
-            showAllQuestions = false;
-            Object.keys(answersState).forEach(key => { if (key !== 'q1') delete answersState[key]; });
-            renderQuestions();
-            return; // No need to re-apply other answers
-        }
-        // Find the question type
-        const question = QUESTIONS.questions.find(q => q.id === questionId);
-        if (Array.isArray(answerId) && question && question.type === 'checkbox') {
-            answerId.forEach(val => {
-                const checkbox = document.querySelector(`input[type=\"checkbox\"][name=\"${questionId}\"][value=\"${val}\"]`);
-                if (checkbox) {
-                    checkbox.checked = true;
-                    const block = document.getElementById(`block-${questionId}`);
-                    if (block) {
-                        block.style.backgroundColor = '#e8f5e9';
-                        setTimeout(() => { block.style.backgroundColor = 'transparent'; }, 2000);
+        
+        // Find the question element
+        const questionBlock = document.getElementById(`block-${questionId}`);
+        if (questionBlock) {
+            // Add visual feedback
+            questionBlock.style.backgroundColor = '#e8f5e9';
+            setTimeout(() => { questionBlock.style.backgroundColor = 'transparent'; }, 2000);
+            
+            // Update the input
+            if (Array.isArray(answerId)) {
+                // Handle checkbox inputs
+                answerId.forEach(val => {
+                    const checkbox = questionBlock.querySelector(`input[type="checkbox"][value="${val}"]`);
+                    if (checkbox) {
+                        checkbox.checked = true;
                     }
-                }
-            });
-        } else {
-            const radioButton = document.querySelector(`input[name=\"${questionId}\"][value=\"${answerId}\"]`);
-            if (radioButton) {
-                radioButton.checked = true;
-                // Add a visual cue
-                const block = document.getElementById(`block-${questionId}`);
-                if (block) {
-                    block.style.backgroundColor = '#e8f5e9';
-                    setTimeout(() => { block.style.backgroundColor = 'transparent'; }, 2000);
-                }
-            }
-        }
-        // If q1 is set to 'Yes' programmatically, trigger showing all questions
-        if (questionId === 'q1' && answerId === '1' && !showAllQuestions) {
-            showAllQuestions = true;
-            triggeredShowAll = true;
-        }
-    }
-    if (triggeredShowAll) {
-        renderQuestions();
-        // Optionally, re-apply answers to the rest of the questions
-        for (const questionId in answers) {
-            if (questionId !== 'q1') {
-                const answerId = answers[questionId];
-                const question = QUESTIONS.questions.find(q => q.id === questionId);
-                if (Array.isArray(answerId) && question && question.type === 'checkbox') {
-                    answerId.forEach(val => {
-                        const checkbox = document.querySelector(`input[type=\"checkbox\"][name=\"${questionId}\"][value=\"${val}\"]`);
-                        if (checkbox) {
-                            checkbox.checked = true;
-                            const block = document.getElementById(`block-${questionId}`);
-                            if (block) {
-                                block.style.backgroundColor = '#e8f5e9';
-                                setTimeout(() => { block.style.backgroundColor = 'transparent'; }, 2000);
-                            }
-                        }
-                    });
-                } else {
-                    const radioButton = document.querySelector(`input[name=\"${questionId}\"][value=\"${answerId}\"]`);
-                    if (radioButton) {
-                        radioButton.checked = true;
-                        const block = document.getElementById(`block-${questionId}`);
-                        if (block) {
-                            block.style.backgroundColor = '#e8f5e9';
-                            setTimeout(() => { block.style.backgroundColor = 'transparent'; }, 2000);
-                        }
+                });
+            } else {
+                // Handle radio and text inputs
+                const input = questionBlock.querySelector(`input[value="${answerId}"]`) ||
+                            questionBlock.querySelector('input[type="text"]');
+                if (input) {
+                    if (input.type === 'text') {
+                        input.value = answerId;
+                    } else {
+                        input.checked = true;
                     }
                 }
             }
         }
     }
+    
+    updateStatus("Assessment updated. Keep speaking or stop.", "listening");
 }
 
 
@@ -348,15 +381,15 @@ function createLLMPrompt(transcript) {
     // This is the most critical part: instructing the LLM precisely.
     return `
       You are an expert AI assistant for a clinical setting. Your task is to analyze a on ongoing conversation between a nurse and a patient and fill out an assessment form based on the provided assessment questions and the dialog between the nurse and the patient.
-      **ASSESSMENT QUESTIONS:**
-      ${JSON.stringify(QUESTIONS, null, 2)}
+      **ASSESSMENT SECTIONS:**
+      ${JSON.stringify(SECTIONS, null, 2)}
 
       **NURSE'S TRANSCRIPT:**
       "${transcript}"
 
       
       **INSTRUCTIONS:**
-      1. Read the provided transcript carefully.Determine if you need to call a tool or you need to return json of questions and answers. If you are calling a tool, do not execute next steps. 
+      1. Read the provided transcript carefully. Determine if you need to call a tool or you need to return json of questions and answers. If you are calling a tool, do not execute next steps. 
       2. Based on the transcript, determine the correct answer for each question in the provided JSON structure.
       3. Your output MUST be ONLY a single, valid JSON object.
       4. The JSON object should have question IDs as keys and the corresponding answer IDs as values.
@@ -377,14 +410,10 @@ function createLLMPrompt(transcript) {
 
                     E.g. the patient smokes and does not drink
                     {
-
-                    "q2": "1",
-                    "q3": "2",
+                        "q2": "1",
+                        "q3": "2"
                     }
-                    Since there is no mention of other questions , those questions are ommited from the output JSON.
-
-
-
+                    Since there is no mention of other questions, those questions are omitted from the output JSON.
     `;
 }
 
@@ -461,69 +490,203 @@ const callFunction = async (name, args) => {
     }
 };
 
-// 6. WEB SPEECH API SETUP
-function setupSpeechRecognition() {
-    window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!window.SpeechRecognition) {
-        updateStatus("Speech recognition not supported in this browser.", "error");
-        recordBtn.disabled = true;
-        return;
-    }
+// 6. WEBSOCKET AND MICROPHONE SETUP
+let socket;
+let microphone;
 
-    recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-        isRecording = true;
-        recordBtn.classList.add('recording');
-        recordBtn.querySelector('i').className = 'fas fa-stop-circle';
-        updateStatus("Listening... Speak now.", "listening");
-        finalTranscript = '';
-    };
-
-    recognition.onresult = (event) => {
-        let interimTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            // Check if the current speech result is final (complete and stable)
-            // isFinal is a boolean property set by the Web Speech API when it's confident
-            // the transcription is complete and won't change further
-            if (event.results[i].isFinal) {
-                const finalChunk = event.results[i][0].transcript.trim();
-                finalTranscript += finalChunk + '. ';
-                // Once a sentence is finished, process it.
-                if (finalChunk.length > 3) { // Avoid processing tiny fragments
-                    processTranscriptWithLLM(finalTranscript);
-                }
-            } else {
-                interimTranscript += event.results[i][0].transcript;
-            }
+async function getMicrophone() {
+    try {
+        // Stop any existing stream
+        if (mediaStream) {
+            mediaStream.getTracks().forEach(track => track.stop());
         }
-        // Show interim results for real-time feedback
-        statusDiv.textContent = `Listening... (Heard: ${finalTranscript}${interimTranscript})`;
-    };
-    
-    recognition.onend = () => {
-        isRecording = false;
-        recordBtn.classList.remove('recording');
-        recordBtn.querySelector('i').className = 'fas fa-microphone';
-        updateStatus("Recording stopped.", "idle");
-    };
+        
+        // Get new stream
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        return new MediaRecorder(mediaStream);
+    } catch (error) {
+        console.error("Error accessing microphone:", error);
+        throw error;
+    }
+}
 
-    recognition.onerror = (event) => {
-        updateStatus(`Speech recognition error: ${event.error}`, "error");
-    };
+async function openMicrophone(microphone, socket) {
+    return new Promise((resolve) => {
+        microphone.onstart = () => {
+            console.log("Recording started");
+            isRecording = true;
+            document.body.classList.add("recording");
+            recordBtn.classList.add('recording');
+            recordBtn.querySelector('i').className = 'fas fa-stop-circle';
+            updateStatus("Listening... Speak now.", "listening");
+            finalTranscript = '';
+            resolve();
+        };
+
+        microphone.onstop = () => {
+            console.log("Recording stopped");
+            isRecording = false;
+            document.body.classList.remove("recording");
+            recordBtn.classList.remove('recording');
+            recordBtn.querySelector('i').className = 'fas fa-microphone';
+            updateStatus("Recording stopped.", "idle");
+        };
+
+        microphone.ondataavailable = (event) => {
+            if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
+                socket.send(event.data);
+            }
+        };
+
+        microphone.start(1000);
+    });
+}
+
+async function closeWebSocket() {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        console.log("Closing WebSocket connection");
+        socket.close();
+        socket = null;
+    }
+}
+
+async function closeMicrophone(microphone) {
+    if (microphone) {
+        microphone.stop();
+        // Stop all tracks in the media stream
+        if (mediaStream) {
+            mediaStream.getTracks().forEach(track => track.stop());
+            mediaStream = null;
+        }
+        // Close WebSocket connection
+        await closeWebSocket();
+        // Reset the final transcript
+        finalTranscript = '';
+    }
+}
+
+function setupWebSocket() {
+    // if (socket && socket.readyState !== WebSocket.CLOSED) {
+    //     console.log("Closing existing WebSocket connection");
+    //     socket.close();
+    // }
+
+    socket = new WebSocket("ws://localhost:3000");
+
+    socket.addEventListener("open", async () => {
+        console.log("WebSocket connection opened");
+        recordBtn.disabled = false;
+        updateStatus("Ready to record", "idle");
+    });
+
+    socket.addEventListener("error", (error) => {
+        console.error("WebSocket error:", error);
+        updateStatus("Connection error. Reconnecting...", "error");
+        // Reset recording state
+        if (isRecording) {
+            isRecording = false;
+            if (microphone) {
+                closeMicrophone(microphone);
+                microphone = null;
+            }
+            document.body.classList.remove("recording");
+            recordBtn.classList.remove('recording');
+            recordBtn.querySelector('i').className = 'fas fa-microphone';
+        }
+    });
+
+    socket.addEventListener("close", () => {
+        console.log("WebSocket connection closed");
+        updateStatus("WebSocket connection getting closed.");
+        recordBtn.disabled = true;
+        
+        // Reset recording state
+        if (isRecording) {
+            isRecording = false;
+            if (microphone) {
+                closeMicrophone(microphone);
+                microphone = null;
+            }
+            document.body.classList.remove("recording");
+            recordBtn.classList.remove('recording');
+            recordBtn.querySelector('i').className = 'fas fa-microphone';
+        }
+        
+        // Try to reconnect after a delay
+        setTimeout(() => {
+            //console.log('socket.readyState', socket.readyState);
+            //if (socket.readyState === WebSocket.CLOSED) {                
+                console.log("Attempting to reconnect WebSocket");
+                setupWebSocket();
+            //}
+        }, 1000);
+    });
+
+    socket.addEventListener("message", (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            
+            // Validate the data structure
+            if (!data || !data.channel || !Array.isArray(data.channel.alternatives) || !data.channel.alternatives[0]) {
+                console.log("Received incomplete transcription data:", data);
+                return;
+            }
+
+            const transcript = data.channel.alternatives[0].transcript;
+            if (transcript && transcript.trim() !== "") {
+                finalTranscript += transcript + ' ';
+                processTranscriptWithLLM(finalTranscript);
+                updateStatus(`Listening... (Heard: ${finalTranscript})`, "listening");
+            }
+        } catch (error) {
+            console.error("Error processing WebSocket message:", error);
+            console.log("Raw message data:", event.data);
+            updateStatus("Error processing audio. Please try again.", "error");
+        }
+    });
 }
 
 // 7. EVENT LISTENERS
-recordBtn.addEventListener('click', () => {
-    if (!recognition) return;
+recordBtn.addEventListener('click', async () => {
+    console.log('Record button clicked');
     
-    if (isRecording) {
-        recognition.stop();
-    } else {
-        recognition.start();
+    try {
+        if (!isRecording) {
+            console.log('Starting new recording');
+            // Setup new WebSocket connection
+            setupWebSocket();
+            // Wait for WebSocket to be ready
+            await new Promise((resolve, reject) => {
+                const checkSocket = () => {
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        resolve();
+                    } else if (!socket || socket.readyState === WebSocket.CLOSED) {
+                        reject(new Error("Failed to establish WebSocket connection"));
+                    } else {
+                        setTimeout(checkSocket, 100);
+                    }
+                };
+                checkSocket();
+            });
+            
+            microphone = await getMicrophone();
+            await openMicrophone(microphone, socket);
+        } else {
+            console.log('Stopping recording');
+            await closeMicrophone(microphone);
+            microphone = null;
+        }
+    } catch (error) {
+        console.error("Error handling microphone:", error);
+        updateStatus("Error accessing microphone. Please check permissions.", "error");
+        // Reset state on error
+        isRecording = false;
+        microphone = null;
+        mediaStream = null;
+        await closeWebSocket();
+        document.body.classList.remove("recording");
+        recordBtn.classList.remove('recording');
+        recordBtn.querySelector('i').className = 'fas fa-microphone';
     }
 });
 
@@ -532,9 +695,9 @@ cancelBtn.addEventListener('click', handleCancel);
 
 // 8. INITIALIZATION
 document.addEventListener('DOMContentLoaded', () => {
-    renderQuestions();
-    setupSpeechRecognition();
-    // Disable start button until model is loaded
+    renderSections();
+    // Disable start button until connection is ready
     recordBtn.disabled = true;
     initializeLLM();
+    setupWebSocket();
 });
